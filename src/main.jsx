@@ -15,16 +15,17 @@ import {
 // --- ⚠️ PASTE YOUR KEYS HERE ⚠️ ---
 
 // 1. Get API Key from: https://aistudio.google.com/
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; 
+const GEMINI_API_KEY = "AIzaSyDRcpsB39McNLWSFqLVwx44B_YAComSeXk"; 
 
 // 2. Get Config from: Firebase Console -> Project Settings -> General -> Your Apps
 const firebaseConfig = {
-  apiKey: "YOUR_FIREBASE_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+  apiKey: "AIzaSyA4YGpAVnJZaVjL-Nut_pRhQxa3BLgWyow",
+  authDomain: "calomad.firebaseapp.com",
+  projectId: "calomad",
+  storageBucket: "calomad.firebasestorage.app",
+  messagingSenderId: "629752839466",
+  appId: "1:629752839466:web:df82b96a8bd09b4160b253",
+  measurementId: "G-8QC86YG3XS"
 };
 
 // --- App Initialization ---
@@ -439,4 +440,5 @@ function App() {
       )}
     </div>
   );
+
 }
