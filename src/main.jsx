@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import { 
   Camera, Plus, Home, Settings, ChevronLeft, Save, Trash2, 
   Loader2, BarChart3, Coffee, Sun, Moon, Cookie, Apple, 
@@ -28,10 +28,24 @@ const firebaseConfig = {
   measurementId: "G-8QC86YG3XS"
 };
 
-// --- App Initialization ---
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// --- Global Vars (Initialized safely) ---
+let app, auth, db;
+let globalInitError = null;
+
+try {
+  // Check for placeholders
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_FIREBASE")) {
+    globalInitError = "MISSING_KEYS";
+  } else {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} catch (e) {
+  console.error("Firebase Init Error:", e);
+  globalInitError = e.message;
+}
+
 const GOOGLE_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // --- Helper Functions ---
@@ -103,8 +117,8 @@ const resizeImage = (file, maxWidth = 800) => {
 };
 
 const analyzeImageWithGemini = async (base64Image) => {
-  if (GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
-    alert("Please set your Gemini API Key in the code!");
+  if (GEMINI_API_KEY.includes("YOUR_GEMINI")) {
+    alert("Missing Gemini API Key! Please add it in src/main.jsx");
     return { food_name: "API Key Missing", calories: 0 };
   }
   try {
@@ -183,6 +197,33 @@ const MacroBar = ({ label, value, total, color }) => {
 
 // --- Main App Component ---
 function App() {
+  // 🔴 SAFETY CHECK: If keys are missing, show error instead of crashing
+  if (globalInitError === "MISSING_KEYS") {
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-6 text-center bg-red-50 font-sans">
+        <div className="bg-white p-6 rounded-2xl shadow-xl max-w-sm w-full border border-red-100">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+            <Settings size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">App Not Configured</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            You must add your API Keys to <code>src/main.jsx</code>.
+          </p>
+          <div className="text-left bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs text-slate-600 mb-4">
+            1. Open src/main.jsx<br/>
+            2. Find GEMINI_API_KEY<br/>
+            3. Find firebaseConfig<br/>
+            4. Paste your real keys
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (globalInitError) {
+    return <div className="p-10 text-red-500">Initialization Error: {globalInitError}</div>;
+  }
+
   const [user, setUser] = useState(null);
   const [view, setView] = useState('home'); 
   const [meals, setMeals] = useState([]);
@@ -196,10 +237,12 @@ function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    // 1. Sign In
     const initAuth = async () => {
-      // In a real local environment, we usually just sign in anonymously directly
-      await signInAnonymously(auth);
+      try {
+        await signInAnonymously(auth);
+      } catch (err) {
+        console.error("Auth Error:", err);
+      }
     };
     initAuth();
 
@@ -212,27 +255,25 @@ function App() {
 
   useEffect(() => {
     if (!user) return;
-    // 2. Load Profile
     const loadProfile = async () => {
-      const docSnap = await getDoc(doc(db, 'users', user.uid, 'profile', 'settings'));
-      if (docSnap.exists()) {
-        const d = docSnap.data();
-        if(d.dailyGoal) setDailyGoal(d.dailyGoal);
-        if(d.weight) setCurrentWeight(d.weight);
-        if(d.waterDate && isToday(d.waterDate)) setWaterIntake(d.water || 0);
-      }
+      try {
+        const docSnap = await getDoc(doc(db, 'users', user.uid, 'profile', 'settings'));
+        if (docSnap.exists()) {
+          const d = docSnap.data();
+          if(d.dailyGoal) setDailyGoal(d.dailyGoal);
+          if(d.weight) setCurrentWeight(d.weight);
+          if(d.waterDate && isToday(d.waterDate)) setWaterIntake(d.water || 0);
+        }
+      } catch (err) { console.error("Profile Load Error:", err); }
       setLoading(false);
     };
     loadProfile();
 
-    // 3. Load Meals
     const q = query(collection(db, 'users', user.uid, 'meals'));
     const unsub = onSnapshot(q, (snap) => {
       const ms = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       ms.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds);
       setMeals(ms);
-    }, (error) => {
-      console.error("Firestore Error:", error);
     });
     return () => unsub();
   }, [user]);
@@ -347,10 +388,8 @@ function App() {
               </div>
 
               {['Breakfast', 'Lunch', 'Dinner', 'Snack'].map(type => {
-                 // Logic to handle grouping meals
-                 // We rely on the useMemo 'todaysMeals' here
-                 const typeMeals = todaysMeals.filter(m => (m.type || 'Snack') === type);
-                 const cals = typeMeals.reduce((a,b)=>a+(b.calories||0),0);
+                 const ms = window.mealsByType && window.mealsByType[type] ? window.mealsByType[type] : [];
+                 const cals = ms.reduce((a,b)=>a+(b.calories||0),0);
                  const icons = { Breakfast: <Coffee size={18} className="text-orange-400"/>, Lunch: <Sun size={18} className="text-yellow-500"/>, Dinner: <Moon size={18} className="text-indigo-400"/>, Snack: <Cookie size={18} className="text-pink-400"/> };
                  
                  return (
@@ -360,7 +399,7 @@ function App() {
                         <div className="text-xs font-bold text-slate-400">{cals} kcal</div>
                       </div>
                       <div className="divide-y divide-slate-50">
-                        {typeMeals.map(m => (
+                        {ms.map(m => (
                           <div key={m.id} className="p-3 flex justify-between items-center">
                             <div><div className="font-medium text-sm">{m.name}</div><div className="text-[10px] text-slate-400">{m.calories} kcal</div></div>
                             <button onClick={() => deleteMeal(m.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
@@ -438,7 +477,18 @@ function App() {
            <button onClick={() => setView('report')} className={`flex flex-col items-center p-2 ${view==='report'?'text-blue-600':'text-gray-400'}`}><BarChart3 size={24}/><span className="text-[10px] font-bold">Stats</span></button>
         </nav>
       )}
+
+      {/* Helpers required for render */}
+      {(() => {
+        // Just defining mealsByType here to keep code clean inside render
+        const groups = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] };
+        todaysMeals.forEach(meal => { const t = meal.type||'Snack'; if(groups[t]) groups[t].push(meal); else groups['Snack'].push(meal); });
+        window.mealsByType = groups;
+        return null; 
+      })()}
     </div>
   );
-
 }
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
